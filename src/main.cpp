@@ -6,9 +6,9 @@
 confwifi wifi;
 WiFiClient espclient;
 PubSubClient client(espclient);
-bool activate = false;
+int activar = 50;
 void callback(char* topic, byte* payload, unsigned int length) {
-    activate = (bool)payload;
+   activar = (int)payload[0];
   }
 
 void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient, const char* mqttUser,const char* mqttPassword){  
@@ -40,15 +40,22 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
 
 void setup() {
   Serial.begin(115200);
+  pinMode(2,OUTPUT);
   wifi.wificonect();
   mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
   client.setCallback(callback);
 }
 
 void loop() {
-  client.loop();
-  if(activate) {
-    Serial.println("Activada alarm");
-    activate = false;
+  if(activar == 49){
+    Serial.println("Alarma activada");
+    digitalWrite(2,HIGH);
+    activar = 50;
   }
+  if(activar == 48){
+    Serial.println("Alarma desactivada");
+    digitalWrite(2,LOW);
+    activar = 50;
+  }
+  client.loop();
 }
