@@ -6,17 +6,10 @@
 confwifi wifi;
 WiFiClient espclient;
 PubSubClient client(espclient);
-
-
+bool activate = false;
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i=0;i<length;i++) {
-    Serial.print((char)payload[i]);
+    activate = (bool)payload;
   }
-  Serial.println();
-}
 
 void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient, const char* mqttUser,const char* mqttPassword){  
   client.setServer(mqttServer,mqttPort);
@@ -54,4 +47,8 @@ void setup() {
 
 void loop() {
   client.loop();
+  if(activate) {
+    Serial.println("Activada alarm");
+    activate = false;
+  }
 }
