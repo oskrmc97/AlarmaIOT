@@ -41,9 +41,14 @@ void autoconnectap(){
   chipID.toUpperCase();
   String AP_SSID = "Alarma" + chipID;
   String AP_PASS = "ESP_" + chipID;
-  ESP_wifiManager.resetSettings();
   ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str());
-  Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
+  while (WiFi.status() != WL_CONNECTED){
+    Serial.print("Error al conectar a la red");        // F means not connected to WiFi
+    ESP_wifiManager.resetSettings();
+    ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str());
+   }
+    Serial.print("Conexion exitosa");        // H means connected to WiFi
+    Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
 }
 
 
@@ -77,10 +82,9 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
 void setup() {
   Serial.begin(115200);
   pinMode(2,INPUT);
-  pinMode(3,OUTPUT);
+  pinMode(4,OUTPUT);
   Serial.println("\nStarting AutoConnectAP");
   autoconnectap();
-  // wifi.wificonect();
   mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
   client.setCallback(callback);
 }
@@ -88,12 +92,12 @@ void setup() {
 void loop() {
   if(activar == 49){
     Serial.println("Alarma activada");
-    digitalWrite(3,HIGH);
+    digitalWrite(4,HIGH);
     activar = 50;
   }
   if(activar == 48){
     Serial.println("Alarma desactivada");
-    digitalWrite(3,LOW);
+    digitalWrite(4,LOW);
     activar = 50;
   }
   client.loop();
