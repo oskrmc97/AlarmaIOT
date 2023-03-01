@@ -8,7 +8,7 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 
-#define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
+// #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
 
 #define LED_ON      HIGH
 #define LED_OFF     LOW
@@ -32,6 +32,7 @@ boolean conexion = false;
 boolean AP_mode = false;
 
 int activar = 50;
+
 void callback(char* topic, byte* payload, unsigned int length) {
    activar = (int)payload[0];
   }
@@ -115,8 +116,12 @@ void autoconnectap(){
 void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient, const char* mqttUser,const char* mqttPassword){  
   client.setServer(mqttServer,mqttPort);
   while(!client.connected()){
-      Serial.println("Connecting to MQTT...");
-      delay(2000);
+      unsigned long checkstatus_timeout = 0;
+      #define MQTT_INTERVAL    2000L
+      if((millis() > checkstatus_timeout) || (checkstatus_timeout == 0)){
+        Serial.println("Connecting to MQTT...");
+        checkstatus_timeout = millis() + MQTT_INTERVAL;
+      }
       if(client.connect("espprincipal",mqttUser,mqttPassword)){
           Serial.println("connected");
           const char* message = "Hello World i am connected to MQTT";
@@ -126,14 +131,18 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
           Serial.println("mensaje sent");
           if(client.subscribe("prueba1"))
               Serial.println("Suscribed to topic!");
-          else
+          else{
+            ulong timecontrol = millis();
+            if(millis() - timecontrol >= 2000)
               Serial.println("Error to subscribe!");
-          delay(2000);
+          }
       }
       else{
-          Serial.println("Error connecting to MQTT");
-          Serial.println(client.state());
-          delay(2000);
+          ulong timecontrol = millis();
+          if(millis()- timecontrol>2000){
+            Serial.println("Error connecting to MQTT");
+            Serial.println(client.state());
+          }
       }
   }
 }
@@ -157,6 +166,7 @@ void setup() {
 }
 
 void loop() {
+
   if(activar == 49){
     Serial.println("Alarma activada");
     digitalWrite(4,HIGH);
