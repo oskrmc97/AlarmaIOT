@@ -30,8 +30,10 @@ String Router_Pass;
 PubSubClient client(espclient);
 boolean conexion = false;
 boolean AP_mode = false;
+static ulong timecontrolprueba =  0;
 
 int activar = 50;
+unsigned int mqttstate;
 
 void callback(char* topic, byte* payload, unsigned int length) {
    activar = (int)payload[0];
@@ -41,9 +43,11 @@ void heartBeatPrint(void){
   
   static int num = 1;
   if (WiFi.status() == WL_CONNECTED){
-        digitalWrite(16,HIGH);
-        digitalWrite(17,LOW);
-        Serial.println("H");
+    if(mqttstate == 0){
+      digitalWrite(16,HIGH);
+    }
+    digitalWrite(17,LOW);
+    Serial.println("H");
       }        // H means connected to WiFi
   else{
         Serial.println("F");
@@ -109,41 +113,67 @@ void autoconnectap(){
       Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
       digitalWrite(18,LOW);
       }
+    else{
+      ESP_wifiManager.resetSettings();
+      if(ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str())){ 
+        conexion = true;
+        Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
+        digitalWrite(18,LOW);
+      }
+    }
     
 }
 
 
 void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient, const char* mqttUser,const char* mqttPassword){  
   client.setServer(mqttServer,mqttPort);
+  unsigned long checkstatus_timeout = 0;
+  unsigned long checkstatus_time = 0;
+  
+  #define MQTT_INTERVAL    1000L
   while(!client.connected()){
-      unsigned long checkstatus_timeout = 0;
-      #define MQTT_INTERVAL    2000L
-      if((millis() > checkstatus_timeout) || (checkstatus_timeout == 0)){
+      if((millis() > checkstatus_timeout)){
         Serial.println("Connecting to MQTT...");
-        checkstatus_timeout = millis() + MQTT_INTERVAL;
-      }
-      if(client.connect("espprincipal",mqttUser,mqttPassword)){
+         if(client.connect("espprincipal",mqttUser,mqttPassword)){
           Serial.println("connected");
           const char* message = "Hello World i am connected to MQTT";
           int length = strlen(message);
           boolean retained = true;
           client.publish("oscarmelo/prueba2",(byte*)message,length,retained);
           Serial.println("mensaje sent");
-          if(client.subscribe("prueba1"))
-              Serial.println("Suscribed to topic!");
+          if(client.subscribe("prueba1")){
+            Serial.println("Suscribed to topic!");
+            mqttstate = client.state();
+          }  
           else{
-            ulong timecontrol = millis();
-            if(millis() - timecontrol >= 2000)
+            ulong timecontrol = 0;
+            if(millis()> timecontrol){
               Serial.println("Error to subscribe!");
+              timecontrol = millis() + 2000;}
           }
       }
       else{
-          ulong timecontrol = millis();
-          if(millis()- timecontrol>2000){
-            Serial.println("Error connecting to MQTT");
-            Serial.println(client.state());
-          }
+          ulong timecontrol = 0;
+            if(millis()> timecontrol){
+              // Serial.println("Error connecting to MQTT");
+              // mqttstate = client.state(); 
+             }
+      } 
+        checkstatus_timeout = millis() + MQTT_INTERVAL;
       }
+
+      if(millis() > checkstatus_time ){
+        digitalWrite(16, HIGH);
+        checkstatus_time = millis() + MQTT_INTERVAL;
+        Serial.println(checkstatus_time/1000);
+      }
+      if(millis() > checkstatus_time){
+        digitalWrite(16, LOW);
+        checkstatus_time = millis() + MQTT_INTERVAL;
+        Serial.println(checkstatus_time);
+      }
+
+
   }
 }
 void encapsuladas(){
