@@ -33,6 +33,7 @@ PubSubClient client(espclient);
 boolean conexion = false;
 boolean AP_mode = false;
 boolean reset_esp = false;
+boolean dog = false;
 static ulong timecontrolprueba =  0;
 
 int activar = 50;
@@ -117,8 +118,8 @@ void autoconnectap(){
   if(AP_mode)
     ESP_wifiManager.resetSettings();
   digitalWrite(18,HIGH);
-  if(ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str())){ 
-      esp_task_wdt_reset();
+  if(ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str())){
+      dog = true; 
       conexion = true;
       Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
       digitalWrite(18,LOW);
@@ -190,6 +191,7 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
 void encapsuladas(){
   autoconnectap();
   if(conexion){
+    esp_task_wdt_init(10, true);
     mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
     client.setCallback(callback);
   }
@@ -199,7 +201,6 @@ void setup() {
   wifimulti.addAP("Nasus_p1","oscar1234@");
   wifimulti.addAP("NASUS","gvp3165504228");
   wifimulti.addAP("alarma","123456789");
-  esp_task_wdt_init(10, true);
   esp_task_wdt_add(NULL);
   Serial.begin(115200);
   pinMode(2,INPUT);
@@ -208,6 +209,7 @@ void setup() {
   pinMode(17,OUTPUT);
   pinMode(18,OUTPUT);
   Serial.println("\nStarting AutoConnectAP");
+  esp_task_wdt_init(240, true);
   encapsuladas();
 }
 
