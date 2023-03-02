@@ -162,6 +162,8 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
              }
       } 
         checkstatus_timeout = millis() + MQTT_INTERVAL;
+        Serial.println("Resetting WDT...");
+        esp_task_wdt_reset();
       }
 
       if(WiFi.status() != WL_CONNECTED){
@@ -175,16 +177,14 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
 
       if(millis() > checkstatus_time ){
         digitalWrite(16, HIGH);
-        checkstatus_time = millis()+(MQTT_INTERVAL_LED/2);
+        checkstatus_time = millis()+(MQTT_INTERVAL_LED/4);
         Serial.println(checkstatus_time/1000);
       }
       if(millis() > checkstatus_time){
         digitalWrite(16, LOW);
-        checkstatus_time = millis() + MQTT_INTERVAL_LED;
+        checkstatus_time = millis() + MQTT_INTERVAL_LED*2;
         Serial.println(checkstatus_time);
       }
-
-      esp_task_wdt_reset();
   }
 }
 void encapsuladas(){
