@@ -6,6 +6,7 @@
 #ifdef ESP32
 #include <esp_wifi.h>
 #include <WiFi.h>
+#include <WiFiMulti.h>
 #include <WiFiClient.h>
 
 // #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
@@ -25,16 +26,17 @@
 #endif
 
 WiFiClient espclient;
+WiFiMulti wifimulti;
 String Router_SSID;
 String Router_Pass;
 PubSubClient client(espclient);
 boolean conexion = false;
 boolean AP_mode = false;
+boolean reset_esp = false;
 static ulong timecontrolprueba =  0;
 
 int activar = 50;
 unsigned int mqttstate;
-
 void callback(char* topic, byte* payload, unsigned int length) {
    activar = (int)payload[0];
   }
@@ -51,8 +53,15 @@ void heartBeatPrint(void){
       }        // H means connected to WiFi
   else{
         Serial.println("F");
+        if(wifimulti.run() == WL_CONNECTED){
+          Serial.println("me conecte a otra red papu");
+          Serial.print(WiFi.SSID());
+          reset_esp = true;
+          digitalWrite(17,HIGH);
+          digitalWrite(16,LOW);
+          
+        }
         digitalWrite(16,LOW);
-        digitalWrite(17,HIGH);
         }
             // F means not connected to WiFi
   if (num == 80)
@@ -71,7 +80,7 @@ void check_status(){
     byte apmode = digitalRead(2);
     static ulong checkstatus_timeout = 0;
 
-    #define HEARTBEAT_INTERVAL    10000L
+    #define HEARTBEAT_INTERVAL    1000L
     // Print hearbeat every HEARTBEAT_INTERVAL (10) seconds.
     if ((millis() > checkstatus_timeout) || (checkstatus_timeout == 0))
     {
@@ -109,6 +118,7 @@ void autoconnectap(){
     ESP_wifiManager.resetSettings();
   digitalWrite(18,HIGH);
   if(ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str())){ 
+      esp_task_wdt_reset();
       conexion = true;
       Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
       digitalWrite(18,LOW);
@@ -180,13 +190,16 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
 void encapsuladas(){
   autoconnectap();
   if(conexion){
-    mqttconnect("broker.mqttdashboard.comn",1883, espclient,"racso","bimborico22D");
+    mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
     client.setCallback(callback);
   }
 }
   
 void setup() {
-  esp_task_wdt_init(60, true);
+  wifimulti.addAP("Nasus_p1","oscar1234@");
+  wifimulti.addAP("NASUS","gvp3165504228");
+  wifimulti.addAP("alarma","123456789");
+  esp_task_wdt_init(10, true);
   esp_task_wdt_add(NULL);
   Serial.begin(115200);
   pinMode(2,INPUT);
@@ -197,6 +210,9 @@ void setup() {
   Serial.println("\nStarting AutoConnectAP");
   encapsuladas();
 }
+
+int i = 0;
+int last = millis();
 
 void loop() {
 
@@ -216,5 +232,14 @@ void loop() {
     AP_mode = false;
     }
   client.loop();
-  esp_task_wdt_reset();
+
+  if (millis() - last >= 2000 && reset_esp == false) {
+      Serial.println("Resetting WDT...");
+      esp_task_wdt_reset();
+      last = millis();
+      if (reset_esp == true) {
+        Serial.println("Stopping WDT reset. CPU should reboot in 3s");
+        reset_esp == false;
+      }
+  }
 }
