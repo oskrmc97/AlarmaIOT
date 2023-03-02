@@ -2,7 +2,7 @@
 #include <ESP_WiFiManager.h> 
 #include "mqtt_client.h"
 #include "PubSubClient.h"
-
+#include <esp_task_wdt.h>
 #ifdef ESP32
 #include <esp_wifi.h>
 #include <WiFi.h>
@@ -113,15 +113,6 @@ void autoconnectap(){
       Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
       digitalWrite(18,LOW);
       }
-    else{
-      ESP_wifiManager.resetSettings();
-      if(ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str())){ 
-        conexion = true;
-        Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
-        digitalWrite(18,LOW);
-      }
-    }
-    
 }
 
 
@@ -131,6 +122,7 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
   unsigned long checkstatus_time = 0;
   
   #define MQTT_INTERVAL    1000L
+  #define MQTT_INTERVAL_LED    1000L
   while(!client.connected()){
       if((millis() > checkstatus_timeout)){
         Serial.println("Connecting to MQTT...");
@@ -162,29 +154,40 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
         checkstatus_timeout = millis() + MQTT_INTERVAL;
       }
 
+      if(WiFi.status() != WL_CONNECTED){
+          while(true){
+            digitalWrite(17,HIGH);
+          }
+        }
+        if(WiFi.status() == WL_CONNECTED){
+          digitalWrite(17,LOW);
+        }
+
       if(millis() > checkstatus_time ){
         digitalWrite(16, HIGH);
-        checkstatus_time = millis() + MQTT_INTERVAL;
+        checkstatus_time = millis()+(MQTT_INTERVAL_LED/2);
         Serial.println(checkstatus_time/1000);
       }
       if(millis() > checkstatus_time){
         digitalWrite(16, LOW);
-        checkstatus_time = millis() + MQTT_INTERVAL;
+        checkstatus_time = millis() + MQTT_INTERVAL_LED;
         Serial.println(checkstatus_time);
       }
 
-
+      esp_task_wdt_reset();
   }
 }
 void encapsuladas(){
   autoconnectap();
   if(conexion){
-    mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
+    mqttconnect("broker.mqttdashboard.comn",1883, espclient,"racso","bimborico22D");
     client.setCallback(callback);
   }
 }
   
 void setup() {
+  esp_task_wdt_init(60, true);
+  esp_task_wdt_add(NULL);
   Serial.begin(115200);
   pinMode(2,INPUT);
   pinMode(4,OUTPUT);
@@ -213,4 +216,5 @@ void loop() {
     AP_mode = false;
     }
   client.loop();
+  esp_task_wdt_reset();
 }
