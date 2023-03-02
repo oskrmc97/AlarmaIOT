@@ -33,7 +33,6 @@ PubSubClient client(espclient);
 boolean conexion = false;
 boolean AP_mode = false;
 boolean reset_esp = false;
-boolean dog = false;
 static ulong timecontrolprueba =  0;
 
 int activar = 50;
@@ -54,15 +53,14 @@ void heartBeatPrint(void){
       }        // H means connected to WiFi
   else{
         Serial.println("F");
+        digitalWrite(17,HIGH);
+        digitalWrite(16,LOW);
         if(wifimulti.run() == WL_CONNECTED){
           Serial.println("me conecte a otra red papu");
           Serial.print(WiFi.SSID());
           reset_esp = true;
-          digitalWrite(17,HIGH);
-          digitalWrite(16,LOW);
-          
         }
-        digitalWrite(16,LOW);
+        digitalWrite(17,LOW);
         }
             // F means not connected to WiFi
   if (num == 80)
@@ -115,11 +113,12 @@ void autoconnectap(){
   chipID.toUpperCase();
   String AP_SSID = "Alarma" + chipID;
   String AP_PASS = "ESP_" + chipID;
-  if(AP_mode)
-    ESP_wifiManager.resetSettings();
+  if(AP_mode){
+     ESP_wifiManager.resetSettings();
+     esp_task_wdt_init(240, true);
+  }
   digitalWrite(18,HIGH);
   if(ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str())){
-      dog = true; 
       conexion = true;
       Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
       digitalWrite(18,LOW);
