@@ -6,11 +6,15 @@
 #ifdef ESP32
 #include <esp_wifi.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <WiFiMulti.h>
 #include <WiFiClient.h>
+#include <UniversalTelegramBot.h>
+#include <ArduinoJson.h>
 
 // #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
-
+#define BOTtoken "5909477841:AAGeXd50ajjAVVPjPJw7hN27IxZAiQi6bpo"  // your Bot Token (Get from Botfather)
+#define CHAT_ID "-1001595822537"
 #define LED_ON      HIGH
 #define LED_OFF     LOW
 #else
@@ -26,10 +30,12 @@
 #endif
 
 WiFiClient espclient;
+WiFiClientSecure espclient_telegram;
 WiFiMulti wifimulti;
 String Router_SSID;
 String Router_Pass;
 PubSubClient client(espclient);
+UniversalTelegramBot bot(BOTtoken, espclient_telegram);
 boolean conexion = false;
 boolean AP_mode = false;
 boolean reset_esp = false;
@@ -37,6 +43,50 @@ static ulong timecontrolprueba =  0;
 
 int activar = 50;
 unsigned int mqttstate;
+
+
+int botRequestDelay = 1000;
+unsigned long lastTimeBotRan;
+
+  void handleNewMessages(int numNewMessages) {
+    Serial.println("handleNewMessages");
+    Serial.println(String(numNewMessages));
+
+  for (int i=0; i<numNewMessages; i++) {
+    // Chat id of the requester
+      String chat_id = String(bot.messages[i].chat_id);
+      if (chat_id != CHAT_ID){
+        bot.sendMessage(chat_id, "Unauthorized user", "");
+        Serial.println("El chat id es:"+chat_id);
+        continue;
+      }
+    
+    // Print the received message
+    String text = bot.messages[i].text;
+    Serial.println(text);
+
+    String from_name = bot.messages[i].from_name;
+
+    if (text == "/start") {
+      String welcome = "Welcome, " + from_name + ".\n";
+      welcome += "Use the following commands to control your outputs.\n\n";
+      welcome += "/led_on to turn GPIO ON \n";
+      welcome += "/led_off to turn GPIO OFF \n";
+      welcome += "/state to request current GPIO state \n";
+      bot.sendMessage(chat_id, welcome, "");
+    }
+
+    if (text == "/led_on") {
+      bot.sendMessage(chat_id, "LED state set to ON", "");
+    }
+    
+    if (text == "/led_off") {
+      bot.sendMessage(chat_id, "LED state set to OFF", "");
+    }
+  }
+}
+
+
 void callback(char* topic, byte* payload, unsigned int length) {
    activar = (int)payload[0];
   }
@@ -190,7 +240,7 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
 void encapsuladas(){
   autoconnectap();
   if(conexion){
-    esp_task_wdt_init(10, true);
+    esp_task_wdt_init(20, true);
     mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
     client.setCallback(callback);
   }
@@ -200,6 +250,7 @@ void setup() {
   wifimulti.addAP("Nasus_p1","oscar1234@");
   wifimulti.addAP("NASUS","gvp3165504228");
   wifimulti.addAP("alarma","123456789");
+  espclient_telegram.setCACert(TELEGRAM_CERTIFICATE_ROOT);
   esp_task_wdt_add(NULL);
   Serial.begin(115200);
   pinMode(2,INPUT);
@@ -242,5 +293,16 @@ void loop() {
         Serial.println("Stopping WDT reset. CPU should reboot in 3s");
         reset_esp == false;
       }
+  }
+
+  if (millis() > lastTimeBotRan + botRequestDelay)  {
+    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+
+    while(numNewMessages) {
+      Serial.println("got response");
+      handleNewMessages(numNewMessages);
+      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+    }
+    lastTimeBotRan = millis();
   }
 }
