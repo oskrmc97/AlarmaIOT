@@ -39,9 +39,11 @@ UniversalTelegramBot bot(BOTtoken, espclient_telegram);
 boolean conexion = false;
 boolean AP_mode = false;
 boolean reset_esp = false;
+boolean policia = true;
 static ulong timecontrolprueba =  0;
 
 int activar = 50;
+int i = 0;
 unsigned int mqttstate;
 
 
@@ -67,21 +69,29 @@ unsigned long lastTimeBotRan;
 
     String from_name = bot.messages[i].from_name;
 
-    if (text == "/start") {
-      String welcome = "Welcome, " + from_name + ".\n";
-      welcome += "Use the following commands to control your outputs.\n\n";
-      welcome += "/led_on to turn GPIO ON \n";
-      welcome += "/led_off to turn GPIO OFF \n";
-      welcome += "/state to request current GPIO state \n";
+    if (text == "/comando") {
+      String welcome = "La comunidad necesita de ti, " + from_name + ".\n";
+      welcome += "Este es un sistema de alarma comunitaria con aviso directo a las autoridades.\n\n";
+      welcome += "/Policia_en_camino para detener mensajes y acudir a la emergencia \n";
+      welcome += "/Apagar para detener alarma \n";
+      welcome += "/Estado para detectar el estado de la alarma \n";
       bot.sendMessage(chat_id, welcome, "");
     }
 
-    if (text == "/led_on") {
-      bot.sendMessage(chat_id, "LED state set to ON", "");
+    if (text == "/Policia_en_camino@Caicedo_15a_bot") {
+      bot.sendMessage(chat_id, "Autoridades fueron notifcadas", "");
+      policia = false;
     }
     
-    if (text == "/led_off") {
-      bot.sendMessage(chat_id, "LED state set to OFF", "");
+    if (text == "/Apagar@Caicedo_15a_bot") {
+      bot.sendMessage(chat_id, "Alarma desactivada", "");
+      activar = 48;
+    }
+    if (text == "/Estado@Caicedo_15a_bot") {
+      if(activar == 49 || activar == 51)
+        bot.sendMessage(chat_id, "Comunidad activo alarma!!!", "");
+       if(activar == 48 || activar == 50)
+        bot.sendMessage(chat_id, "Alarma desactivada", "");
     }
   }
 }
@@ -246,6 +256,31 @@ void encapsuladas(){
   }
 }
   
+void activacion(int i){
+   if(activar == 49){
+    Serial.println("Alarma activada");
+    digitalWrite(4,HIGH);
+    activar = 51;
+  }
+  if(activar == 48){
+    Serial.println("Alarma desactivada");
+    digitalWrite(4,LOW);
+    activar = 50;
+    i = 0;
+  }
+}
+void actualizarbot(){
+  if (millis() > lastTimeBotRan + botRequestDelay)  {
+    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+
+  while(numNewMessages) {
+    Serial.println("msm recibido");
+    handleNewMessages(numNewMessages);
+    numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+  }
+    lastTimeBotRan = millis();
+  }
+}
 void setup() {
   wifimulti.addAP("Nasus_p1","oscar1234@");
   wifimulti.addAP("NASUS","gvp3165504228");
@@ -263,27 +298,22 @@ void setup() {
   encapsuladas();
 }
 
-int i = 0;
 int last = millis();
 
 void loop() {
 
-  if(activar == 49){
-    Serial.println("Alarma activada");
-    digitalWrite(4,HIGH);
-    activar = 50;
-  }
-  if(activar == 48){
-    Serial.println("Alarma desactivada");
-    digitalWrite(4,LOW);
-    activar = 50;
-  }
+  activacion(i);
   check_status();
   if(AP_mode){
     encapsuladas();
     AP_mode = false;
     }
   client.loop();
+  actualizarbot();
+
+   if((activar == 49 || activar == 51) && policia == true){
+        bot.sendMessage(CHAT_ID, "Comunidad activo alarma!!!", "");
+      }
 
   if (millis() - last >= 2000 && reset_esp == false) {
       Serial.println("Resetting WDT...");
@@ -295,14 +325,5 @@ void loop() {
       }
   }
 
-  if (millis() > lastTimeBotRan + botRequestDelay)  {
-    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
 
-    while(numNewMessages) {
-      Serial.println("got response");
-      handleNewMessages(numNewMessages);
-      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-    }
-    lastTimeBotRan = millis();
-  }
 }
