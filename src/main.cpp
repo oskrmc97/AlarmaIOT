@@ -100,6 +100,9 @@ unsigned long lastTimeBotRan;
 
 void callback(char* topic, byte* payload, unsigned int length) {
    activar = (int)payload[0];
+   Serial.println("Mensaje "+activar);
+   Serial.println(topic);
+   bot.sendMessage(CHAT_ID, topic, "");
   }
 
 void heartBeatPrint(void){
@@ -205,9 +208,9 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
           const char* message = "Hello World i am connected to MQTT";
           int length = strlen(message);
           boolean retained = true;
-          client.publish("oscarmelo/prueba2",(byte*)message,length,retained);
+          client.publish("oscarmelo/prueba",(byte*)message,length,retained);
           Serial.println("mensaje sent");
-          if(client.subscribe("prueba1")){
+          if(client.subscribe("+/AlarmaComunitaria")){
             Serial.println("Suscribed to topic!");
             mqttstate = client.state();
           }  
