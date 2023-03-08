@@ -1,20 +1,20 @@
-#include <Arduino.h>
-#include <ESP_WiFiManager.h> 
-#include "mqtt_client.h"
-#include "PubSubClient.h"
-#include <esp_task_wdt.h>
-#ifdef ESP32
-#include <esp_wifi.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <WiFiMulti.h>
-#include <WiFiClient.h>
-#include <UniversalTelegramBot.h>
-#include <ArduinoJson.h>
+#include <Arduino.h> //necesario para el funcionamiento en vsc
+#include <ESP_WiFiManager.h>  //libreria para la conexion wifi Auotoconect aP en este caso
+#include "mqtt_client.h" // conexion al broker
+#include "PubSubClient.h" // publicar en el broker y suscribir en el broker
+#include <esp_task_wdt.h> // WatchDog
+#ifdef ESP32 // se define la esp a usar segun eso las librerias que se utilizan
+#include <esp_wifi.h> // conexion wifi, con esto se crea un cliente wifi (No usada)
+#include <WiFi.h> // igual al anterior
+#include <WiFiClientSecure.h> // necesario para telegram
+#include <WiFiMulti.h> // sirve para conectar a multiples APS
+#include <WiFiClient.h> // cliente wifi
+#include <UniversalTelegramBot.h> // bot de telegram
+#include <ArduinoJson.h> // telegram 
 
 // #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
 #define BOTtoken "5909477841:AAGeXd50ajjAVVPjPJw7hN27IxZAiQi6bpo"  // your Bot Token (Get from Botfather)
-#define CHAT_ID "-1001595822537"
+#define CHAT_ID "-1001595822537" //id grupo de telegram
 #define LED_ON      HIGH
 #define LED_OFF     LOW
 #else
@@ -76,6 +76,7 @@ unsigned long lastTimeBotRan;
       welcome += "/Apagar para detener alarma \n";
       welcome += "/Estado para detectar el estado de la alarma \n";
       bot.sendMessage(chat_id, welcome, "");
+
     }
 
     if (text == "/Policia_en_camino@Caicedo_15a_bot") {
@@ -118,7 +119,6 @@ void heartBeatPrint(void){
         if(wifimulti.run() == WL_CONNECTED){
           Serial.println("me conecte a otra red papu");
           Serial.print(WiFi.SSID());
-          reset_esp = true;
         }
         digitalWrite(17,LOW);
         }
@@ -148,6 +148,10 @@ void check_status(){
     }
     if(WiFi.status()!= WL_CONNECTED && apmode==1){
       AP_mode = true;
+        if(wifimulti.run() == WL_CONNECTED){
+          Serial.println("me conecte a otra red papu");
+          Serial.print(WiFi.SSID());
+        }
     }
   }
 
@@ -251,7 +255,8 @@ void encapsuladas(){
   autoconnectap();
   if(conexion){
     esp_task_wdt_init(20, true);
-    mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
+    mqttconnect("152.67.34.107",1883, espclient,"","");
+    // mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
     client.setCallback(callback);
   }
 }
@@ -281,9 +286,21 @@ void actualizarbot(){
     lastTimeBotRan = millis();
   }
 }
+
+void HandleMqtt()
+{
+   if (!client.connected())
+   {
+    if(conexion){
+      mqttconnect("152.67.34.107",1883, espclient,"","");
+      client.setCallback(callback);
+  }
+   }
+    client.loop();
+}
+
 void setup() {
-  wifimulti.addAP("Nasus_p1","oscar1234@");
-  wifimulti.addAP("NASUS","gvp3165504228");
+  wifimulti.addAP("pruebas","oscar1234");
   wifimulti.addAP("alarma","123456789");
   espclient_telegram.setCACert(TELEGRAM_CERTIFICATE_ROOT);
   esp_task_wdt_add(NULL);
@@ -308,7 +325,7 @@ void loop() {
     encapsuladas();
     AP_mode = false;
     }
-  client.loop();
+  HandleMqtt();
   actualizarbot();
 
    if((activar == 49 || activar == 51) && policia == true){
