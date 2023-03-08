@@ -287,7 +287,7 @@ void actualizarbot(){
   }
 }
 
-void HandleMqtt()
+void HandleMqtt() //revisa la conexion del broker
 {
    if (!client.connected())
    {
@@ -298,7 +298,6 @@ void HandleMqtt()
    }
     client.loop();
 }
-
 void setup() {
   wifimulti.addAP("pruebas","oscar1234");
   wifimulti.addAP("alarma","123456789");
