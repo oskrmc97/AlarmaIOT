@@ -47,7 +47,7 @@ int i = 0;
 unsigned int mqttstate;
 
 const int boton = 2;
-const int señal = 4;
+const int senal = 19;
 const int led_verde = 16;
 const int led_rojo = 17;
 const int led_azul = 18;
@@ -168,7 +168,7 @@ void autoconnectap(){
   ESP_WiFiManager ESP_wifiManager("AutoConnectAP");
   ESP_wifiManager.setDebugOutput(true);
   ESP_wifiManager.setAPStaticIPConfig(IPAddress(192, 168, 0, 120), IPAddress(192, 168, 0, 1), IPAddress(255, 255, 255, 0)); // Crea la configuracion para la red AP
-  ESP_wifiManager.setMinimumSignalQuality(-1); // la minima señal permitida
+  ESP_wifiManager.setMinimumSignalQuality(-1); // la minima n permitida
   Router_SSID = ESP_wifiManager.WiFi_SSID(); // Obtiene la ultima red coneectada eeprom
   Router_Pass = ESP_wifiManager.WiFi_Pass(); //obtiene la contraseña de la ultima red conectada, Eeprom
   Serial.println("Stored: SSID = " + Router_SSID + ", Pass = " + Router_Pass);
@@ -269,7 +269,7 @@ void encapsuladas(){ // funcion que trae las funciones principales conexion wifi
   autoconnectap(); // llama a la conexion a internet
   if(conexion){ // si la conexion a internet fue exitosa, intenta la conexion con el broker
     esp_task_wdt_init(20, true); // si todo fue correcto, define el watchdogs en 20 seg. sacandolo de los 4 min establecidos anteriormente
-    mqttconnect("152.67.34.107",1883, espclient,"",""); // conexion al broker
+    mqttconnect("140.238.178.88",1883, espclient,"racso","123456"); // conexion al broker
     // mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
     client.setCallback(callback); // funcion para escuchar los datos del broker
   }
@@ -278,12 +278,12 @@ void encapsuladas(){ // funcion que trae las funciones principales conexion wifi
 void activacion(int i){
    if(activar == 49){ // es el valor en enteros del primer caracter del payload
     Serial.println("Alarma activada");
-    digitalWrite(señal,HIGH);
+    digitalWrite(senal,HIGH);
     activar = 51;
   }
   if(activar == 48){ // es el valor de 0 en el primer caracter del payload
     Serial.println("Alarma desactivada");
-    digitalWrite(señal,LOW);
+    digitalWrite(senal,LOW);
     activar = 50;
     i = 0;
   }
@@ -306,7 +306,7 @@ void HandleMqtt() //revisa la conexion del broker constantemente
    if (!client.connected()) // si se descoencta
    {
     if(conexion){ // y hay wifi
-      mqttconnect("152.67.34.107",1883, espclient,"",""); // intenta nuevamnete la conexion 
+      mqttconnect("140.238.178.88",1883, espclient,"",""); // intenta nuevamnete la conexion 
       client.setCallback(callback); // vuelve a escuchar al broker
   }
    }
@@ -319,7 +319,7 @@ void setup() {
   esp_task_wdt_add(NULL); // necesario para el watchdog
   Serial.begin(115200);
   pinMode(boton,INPUT);
-  pinMode(señal,OUTPUT);
+  pinMode(senal,OUTPUT);
   pinMode(led_verde,OUTPUT);
   pinMode(led_rojo,OUTPUT);
   pinMode(led_azul,OUTPUT);
