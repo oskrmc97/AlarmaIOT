@@ -47,7 +47,7 @@ int i = 0;
 unsigned int mqttstate;
 
 const int boton = 2;
-const int senal = 19;
+const int senal = 4;
 const int led_verde = 16;
 const int led_rojo = 17;
 const int led_azul = 18;
