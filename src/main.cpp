@@ -219,7 +219,7 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
           const char* message = "Hello World i am connected to MQTT"; // guarda un mensaje en char*
           int length = strlen(message); // obtiene la longitud del mensaje
           boolean retained = true; // retiene el mensaje hasta ser enviado
-          client.publish("oscarmelo/prueba",(byte*)message,length,retained); // publica el mensaje en el topic establecido, convirtiendo el mensaje en byte payload[]
+          client.publish("nuevaEsp/prueba",(byte*)message,length,retained); // publica el mensaje en el topic establecido, convirtiendo el mensaje en byte payload[]
           Serial.println("mensaje sent");
           if(client.subscribe("+/AlarmaComunitaria")){ // nos suscribimos a un topico, en este caso a cualquiera que tenga como topic final /alarmaComonitaria
             Serial.println("Suscribed to topic!");
@@ -313,7 +313,7 @@ void HandleMqtt() //revisa la conexion del broker constantemente
     client.loop(); // llama al cliente mqtt de manera periodica
 }
 void setup() {
-  wifimulti.addAP("pruebas","oscar1234");
+  wifimulti.addAP("Familia normal","dias04021504");
   wifimulti.addAP("alarma","123456789");
   espclient_telegram.setCACert(TELEGRAM_CERTIFICATE_ROOT);
   esp_task_wdt_add(NULL); // necesario para el watchdog
