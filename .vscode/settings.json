@@ -1,7 +1,8 @@
 {
     "files.associations": {
         "cstddef": "cpp",
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "system_error": "cpp"
     },
     "cmake.sourceDirectory": "/home/oscar/Documents/proyectos/Alarma/AlarmaIOT/.pio/libdeps/esp32dev/ArduinoJson"
 }

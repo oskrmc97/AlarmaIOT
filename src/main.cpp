@@ -41,6 +41,8 @@ boolean AP_mode = false;
 boolean reset_esp = false;
 boolean policia = true;
 static ulong timecontrolprueba =  0;
+int numeroEntero = 0;
+int ctrlconn = 1;
 
 int activar = 50;
 int i = 0;
@@ -105,6 +107,13 @@ unsigned long lastTimeBotRan;
 
 
 void callback(char* topic, byte* payload, unsigned int length) { // recibe los mensajes del broker y el topico suscrito
+
+  Serial.print("Mensaje: ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+
    activar = (int)payload[0]; // convierte los bits en enteros, con lo cual cada caracter es un numero entero, obtiene solo el primero
    Serial.println("Mensaje "+activar); 
    Serial.println(topic);
@@ -165,6 +174,7 @@ void check_status(){ //funcion que va en el loop para verificar la conexion
   }
 
 void autoconnectap(){
+
   ESP_WiFiManager ESP_wifiManager("AutoConnectAP");
   ESP_wifiManager.setDebugOutput(true);
   ESP_wifiManager.setAPStaticIPConfig(IPAddress(192, 168, 0, 120), IPAddress(192, 168, 0, 1), IPAddress(255, 255, 255, 0)); // Crea la configuracion para la red AP
@@ -177,6 +187,7 @@ void autoconnectap(){
       {
           ESP_wifiManager.setConfigPortalTimeout(0); //If no access point name has been previously entered disable timeout.
           Serial.println("Got stored Credentials. Timeout 60s");
+          Serial.println(WiFi.SSID());
       }
       else
       {
@@ -185,6 +196,8 @@ void autoconnectap(){
             Serial.println("me conecte a otra red papu");
             Serial.print(WiFi.SSID());
         }
+
+        Serial.println("Sali de aqui gf");
           
       }
   String chipID = String(ESP_getChipId(), HEX); //Obitene el id de la ESP
@@ -216,10 +229,10 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
         Serial.println("Connecting to MQTT...");
          if(client.connect("espprincipal",mqttUser,mqttPassword)){ // la conexion al broker es correcta
           Serial.println("connected");
-          const char* message = "Hello World i am connected to MQTT"; // guarda un mensaje en char*
+          const char* message = "Ingrese red auxiliar"; // guarda un mensaje en char*
           int length = strlen(message); // obtiene la longitud del mensaje
           boolean retained = true; // retiene el mensaje hasta ser enviado
-          client.publish("nuevaEsp/prueba",(byte*)message,length,retained); // publica el mensaje en el topic establecido, convirtiendo el mensaje en byte payload[]
+          client.publish("oscarmelo/prueba",(byte*)message,length,retained); // publica el mensaje en el topic establecido, convirtiendo el mensaje en byte payload[]
           Serial.println("mensaje sent");
           if(client.subscribe("+/AlarmaComunitaria")){ // nos suscribimos a un topico, en este caso a cualquiera que tenga como topic final /alarmaComonitaria
             Serial.println("Suscribed to topic!");
@@ -308,12 +321,28 @@ void HandleMqtt() //revisa la conexion del broker constantemente
     if(conexion){ // y hay wifi
       mqttconnect("140.238.178.88",1883, espclient,"",""); // intenta nuevamnete la conexion 
       client.setCallback(callback); // vuelve a escuchar al broker
-  }
+    }
+  numeroEntero = 0;
    }
     client.loop(); // llama al cliente mqtt de manera periodica
+    String control = String(numeroEntero);
+    static ulong checkstatus_timeout = 0; // tiempo donde se compara el valor de millis()
+
+    #define HEARTBEAT_INTERVAL_CTRL    1000L // El "Delay" para aumentar a la funcion millis()
+    // Print hearbeat every HEARTBEAT_INTERVAL (10) seconds.
+    if ((millis() > checkstatus_timeout) || (checkstatus_timeout == 0))
+    {
+        numeroEntero++;
+        client.publish("tiempo/prueba",control.c_str());
+        if(numeroEntero == 100){
+          numeroEntero = 0;
+        }
+        checkstatus_timeout = millis() + HEARTBEAT_INTERVAL_CTRL; // vuelve a entrar cuando millis sea mayor a 1seg
+    }
+      
 }
 void setup() {
-  wifimulti.addAP("Familia normal","dias04021504");
+  wifimulti.addAP("pruebas","oscar1234");
   wifimulti.addAP("alarma","123456789");
   espclient_telegram.setCACert(TELEGRAM_CERTIFICATE_ROOT);
   esp_task_wdt_add(NULL); // necesario para el watchdog
