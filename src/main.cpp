@@ -227,7 +227,7 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
   while(!client.connected()){ // el mqtt no esta conectado, se queda en este ciclo
       if((millis() > checkstatus_timeout)){ // entra al "Delay"
         Serial.println("Connecting to MQTT...");
-         if(client.connect("espprincipal",mqttUser,mqttPassword)){ // la conexion al broker es correcta
+         if(client.connect("espAuxiliar",mqttUser,mqttPassword)){ // la conexion al broker es correcta
           Serial.println("connected");
           const char* message = "Ingrese red auxiliar"; // guarda un mensaje en char*
           int length = strlen(message); // obtiene la longitud del mensaje
@@ -282,7 +282,7 @@ void encapsuladas(){ // funcion que trae las funciones principales conexion wifi
   autoconnectap(); // llama a la conexion a internet
   if(conexion){ // si la conexion a internet fue exitosa, intenta la conexion con el broker
     esp_task_wdt_init(20, true); // si todo fue correcto, define el watchdogs en 20 seg. sacandolo de los 4 min establecidos anteriormente
-    mqttconnect("140.238.178.88",1883, espclient,"racso","123456"); // conexion al broker
+    mqttconnect("140.238.178.88",1883, espclient,"",""); // conexion al broker
     // mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
     client.setCallback(callback); // funcion para escuchar los datos del broker
   }
