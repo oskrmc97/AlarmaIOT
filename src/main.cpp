@@ -15,6 +15,7 @@
 // #define ESP_getChipId()   ((uint32_t)ESP.getEfuseMac())
 #define BOTtoken "5909477841:AAGeXd50ajjAVVPjPJw7hN27IxZAiQi6bpo"  // your Bot Token (Get from Botfather)
 #define CHAT_ID "-1001595822537" //id grupo de telegram
+
 #define LED_ON      HIGH
 #define LED_OFF     LOW
 #else
@@ -40,9 +41,11 @@ boolean conexion = false;
 boolean AP_mode = false;
 boolean reset_esp = false;
 boolean policia = true;
+String chipID = String(ESP_getChipId(), HEX); //Obitene el id de la ESP
 static ulong timecontrolprueba =  0;
 int numeroEntero = 0;
 int ctrlconn = 1;
+String grupo = "";
 
 int activar = 50;
 int i = 0;
@@ -53,7 +56,7 @@ const int senal = 4;
 const int led_verde = 16;
 const int led_rojo = 17;
 const int led_azul = 18;
-
+boolean suscripcionTopico = true;
 
 int botRequestDelay = 1000;
 unsigned long lastTimeBotRan;
@@ -71,7 +74,7 @@ unsigned long lastTimeBotRan;
         continue; //Al no ser autorizado, sale del ciclo "for" por ende no ejecuta el codigo restante
       }
     
-    // Print the received message
+    // Se imprime el mensaje recivido
     String text = bot.messages[i].text; //obtiene el texto del chat iterando la cantidad de mensajes
     Serial.println(text);
 
@@ -111,7 +114,25 @@ void callback(char* topic, byte* payload, unsigned int length) { // recibe los m
   Serial.print("Mensaje: ");
   for (int i = 0; i < length; i++) {
     Serial.print((char)payload[i]);
+    grupo += (char)payload[i];
   }
+  String grupoEsp = grupo+"_"+chipID; //se crea grupo para que no se repita
+  Serial.println();
+  Serial.println(grupoEsp);
+  const char* topic1 = "+/"; 
+  const char* topic2 = grupoEsp.c_str();
+  char fullTopic[50];  // Ajusta el tamaño según tus necesidades
+  strcpy(fullTopic, topic1);
+  strcat(fullTopic, topic2);
+  if(suscripcionTopico){
+     if(client.subscribe(fullTopic)){ // nos suscribimos a un topico, en este caso a cualquiera que tenga como topic final /alarmaComonitaria
+            Serial.println("Suscribed to full topic del grupo!");
+            mqttstate = client.state(); // obtiene el estado de la conexion, si es 0, fue correcta
+            suscripcionTopico = false;
+      } 
+
+  }
+   
   Serial.println();
 
    activar = (int)payload[0]; // convierte los bits en enteros, con lo cual cada caracter es un numero entero, obtiene solo el primero
@@ -200,7 +221,7 @@ void autoconnectap(){
         Serial.println("Sali de aqui gf");
           
       }
-  String chipID = String(ESP_getChipId(), HEX); //Obitene el id de la ESP
+
   chipID.toUpperCase();
   String AP_SSID = "Alarma" + chipID; //El nombre de la red AP
   String AP_PASS = "ESP_" + chipID; //Pass de la red AP
@@ -227,15 +248,20 @@ void mqttconnect(const char* mqttServer,const int mqttPort, WiFiClient espclient
   while(!client.connected()){ // el mqtt no esta conectado, se queda en este ciclo
       if((millis() > checkstatus_timeout)){ // entra al "Delay"
         Serial.println("Connecting to MQTT...");
-         if(client.connect("espAuxiliar",mqttUser,mqttPassword)){ // la conexion al broker es correcta
+         if(client.connect("espAuxiliar",mqttUser,mqttPassword)){ // la conexion al broker es correcta Editar Dianmica esp
           Serial.println("connected");
           const char* message = "Ingrese red auxiliar"; // guarda un mensaje en char*
           int length = strlen(message); // obtiene la longitud del mensaje
           boolean retained = true; // retiene el mensaje hasta ser enviado
           client.publish("oscarmelo/prueba",(byte*)message,length,retained); // publica el mensaje en el topic establecido, convirtiendo el mensaje en byte payload[]
           Serial.println("mensaje sent");
-          if(client.subscribe("+/AlarmaComunitaria")){ // nos suscribimos a un topico, en este caso a cualquiera que tenga como topic final /alarmaComonitaria
-            Serial.println("Suscribed to topic!");
+          const char* topicConf1 = "cerbero/Config_"; 
+          const char* topicConf2 = chipID.c_str();
+          char fullTopicConf[50];  // Ajusta el tamaño según tus necesidades
+          strcpy(fullTopicConf, topicConf1);
+          strcat(fullTopicConf, topicConf2);
+          if(client.subscribe(fullTopicConf)){ // nos suscribimos a un topico de configuracion
+            Serial.println("Modo configuracion!");
             mqttstate = client.state(); // obtiene el estado de la conexion, si es 0, fue correcta
           }  
           else{ //evia mensaje de error al suscribirse al topico, de manera serial
