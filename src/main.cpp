@@ -1,8 +1,8 @@
-
 #include <ESP_WiFiManager.h>       //libreria para la conexion wifi Auotoconect aP en este caso
 #include "mqtt_client.h"           // conexion al broker
 #include "PubSubClient.h"          // publicar en el broker y suscribir en el broker
 #include <esp_task_wdt.h>          // WatchDog
+#include <Ticker.h>                // necesaria para activar funciones independientemente del programa
 #ifdef ESP32                       // se define la esp a usar segun eso las librerias que se utilizan
 #include <esp_wifi.h>              // conexion wifi, con esto se crea un cliente wifi (No usada)
 #include <WiFi.h>                  // igual al anterior
@@ -30,6 +30,15 @@
 #define LED_ON LOW
 #define LED_OFF HIGH
 #endif
+#define triacPulse 33  // PIN DE SALIDA HACIA EL MOC3021   (AZUL)
+#define ZVC 32         // PIN DE ENTRADA DESDE EL DETECTOR DE CRUCE POR CERO 4N25 (BLANCO)
+// variables para configurar MQTT
+const char *mqtt_server = "140.238.178.88";  //140.238.178.88
+const int mqtt_port = 1883;
+const char *mqtt_user = "rcaso";
+const char *mqtt_pass = "";
+
+//
 
 WiFiClient espclient;
 WiFiClientSecure espclient_telegram;
@@ -43,17 +52,27 @@ boolean AP_mode = false;
 boolean reset_esp = false;
 boolean policia = true;
 String chipID = String(ESP_getChipId(), HEX);  //Obitene el id de la ESP
+//chipID.toUpperCase();
+const char *root_topic_subscribe = "Alarma/";
+String Topico_sub = String(root_topic_subscribe) + chipID;
+char msg[50];
+const char *root_topic_publish = "/mensajes";
 static ulong timecontrolprueba = 0;
 int numeroEntero = 0;
 int ctrlconn = 1;
 String grupo = "";
 
 int activar = -1;
-char alarmaMqtt = '0';
+String mensaje;
+String alarmaMqtt;
 int i = 0;
 unsigned int mqttstate;
+// parametros para variar el cruce por cero
+int Slider_Value = 0;
+int dimming = 7200;
+
 // parametros para variar la alarma
-const int alarma = 23;             // PIN de salida
+//const int alarma = 23;             // PIN de salida
 const int freq = 5000;             // frecuencia por defecto 5khz
 const int ledChannel = 0;          // canal de salida de PWM 0 o 1
 const int resolutionPWM = 8;       // resolucion de la salida PWM 8 por defecto
@@ -67,25 +86,183 @@ int cont1, cont2, cont3, cont4;
 unsigned long time1;
 unsigned long time2;
 unsigned long time3;
+int contadorestado;
+String fullTopic;  // Ajusta el tamaño según tus necesidades
+
 //int setAlarma = 0;
 //
 //const String root_topic_subscribe = cerbero/
 const int boton = 3;
-const int senal = 4;
-const int led_verde = 16;
-const int led_rojo = 17;
-const int led_azul = 18;
+// const int led_verde = 32;
+// const int led_rojo = 33;
+// const int led_azul = 34;
 boolean suscripcionTopico = true;
 
 int botRequestDelay = 1000;
 unsigned long lastTimeBotRan;
+// funciones de activacion y desactivacion de alarmas
+Ticker alarmaPerros;     // activa funcionPerros()
+Ticker alarmaLadron;     // activa funcionLadron()
+Ticker alarmaPelea;      // activa funcionPlea()
+Ticker alarmaTerremoto;  // activa funcionTerremoto()
+
+void funcionPerros() {
+  Serial.println(contadorestado);
+  if (contadorestado >= 4) {
+    Serial.println("ACABO PERROS");
+    Bandera1 = false;
+    alarmaMqtt = "0";
+    dimming = 7200;
+    digitalWrite(triacPulse, LOW);
+    alarmaPerros.detach();
+    contadorestado = 0;
+    esp_task_wdt_reset();
+  }
+  if (contadorestado % 2 == 0) {
+    dimming = 7200;
+    //Serial.println(dimming);
+  } else {
+    dimming = 200;
+    //Serial.println(dimming);
+  }
+
+  contadorestado++;
+}
+void funcionLadron() {
+  Serial.println(contadorestado);
+  if (contadorestado >= 6) {
+    Serial.println("ACABO LADRON");
+    Bandera2 = false;
+    alarmaMqtt = "0";
+    dimming = 7200;
+    digitalWrite(triacPulse, LOW);
+    alarmaLadron.detach();
+    contadorestado = 0;
+    esp_task_wdt_reset();
+  }
+  if (contadorestado % 2 == 0) {
+    dimming = 7200;
+    //Serial.println(dimming);
+  } else {
+    dimming = 200;
+    //Serial.println(dimming);
+  }
+
+  contadorestado++;
+}
+
+void funcionPelea() {  //
+  Serial.println(contadorestado);
+  if (contadorestado >= 6) {
+    Serial.println("ACABO PELEA");
+    Bandera3 = false;
+    alarmaMqtt = "0";
+    dimming = 7200;
+    digitalWrite(triacPulse, LOW);
+    alarmaPelea.detach();
+    contadorestado = 0;
+    esp_task_wdt_reset();
+  }
+  if (contadorestado % 2 == 0) {
+    dimming = 7200;
+    //Serial.println(dimming);
+  } else {
+    dimming = 200;
+    //Serial.println(dimming);
+  }
+
+  contadorestado++;
+}
+
+void funcionTerremoto() {
+  Serial.println(contadorestado);
+  if (contadorestado >= 10) {
+    Serial.println("ACABO TERREMOTO");
+    Bandera4 = false;
+    alarmaMqtt = "0";
+    dimming = 7200;
+    digitalWrite(triacPulse, LOW);
+    alarmaTerremoto.detach();  // termina la funcion
+    contadorestado = 0;
+    esp_task_wdt_reset();
+  }
+  if (contadorestado % 2 == 0) {
+    dimming = 7200;
+    //Serial.println(dimming);
+  } else {
+    dimming = 200;
+    //Serial.println(dimming);
+  }
+
+  contadorestado++;
+}
+void activacion() {  // aqui es para modelar el motor
+  alarmaMqtt = mensaje;
+
+  //Serial.print(alarmaMqtt);
+  //Serial.println("ALARMA PARA PERROS");
+  if (alarmaMqtt != 0) {
+    actualizarbot();
+    delay(1);
+    //Serial.println(alarmaMqtt);
+    if (alarmaMqtt == "1" || Bandera1 == true) {  // programa para alarma para perros
+      // iniciamos la alarma
+      Bandera1 = true;
+      if (policia == true) {
+
+        bot.sendMessage(CHAT_ID, "Comunidad activo alarma!!!", "");
+        bot.sendMessage(CHAT_ID, "UN PERRO ORINANDO EN LA CALLE", "");
+      }
+      Serial.println("ALARMA PARA PERROS");
+      alarmaPerros.attach(1, funcionPerros);
+    }
+
+    if (alarmaMqtt == "2" || Bandera2 == true) {  // alarma para ladrones
+      // iniciamos la alarma
+      delay(1);
+      Bandera2 = true;
+      if (policia == true) {
+        bot.sendMessage(CHAT_ID, "Comunidad activo alarma!!!", "");
+        bot.sendMessage(CHAT_ID, "HAY UN LADRON!!!", "");
+      }
+      Serial.println("ALARMA PARA LADRONES");
+      alarmaPerros.attach(1.5, funcionLadron);  // activa el tiempo de la funcion
+    }
+    if (alarmaMqtt == "3" || Bandera3 == true) {  // alarma para PELEA// iniciamos la alarma
+      delay(1);
+      Bandera3 = true;
+      if (policia == true) {  // llama al bot de telegram
+        bot.sendMessage(CHAT_ID, "Comunidad activo alarma!!!", "");
+        bot.sendMessage(CHAT_ID, "HAY UNA  PELEA EN EL SECTOR!!!", "");
+      }
+
+      Serial.println("ALARMA PARA PELEA");
+      alarmaPelea.attach(1, funcionPelea);
+    }
+    if (alarmaMqtt == "5" || Bandera4 == true) {  // alarma para TERREMOTO
+      // iniciamos la alarma
+      delay(1);
+      Bandera4 = true;
+      if (policia == true) {
+        bot.sendMessage(CHAT_ID, "Comunidad activo alarma!!!", "");
+        bot.sendMessage(CHAT_ID, "HAY UNA  PELEA EN EL SECTOR!!!", "");
+      }
+
+      Serial.println("ALARMA PARA TERREMOTO");
+      alarmaTerremoto.attach(2, funcionTerremoto);  // activa el tiempo de la funcion terremoto
+    }
+    esp_task_wdt_reset();
+  } else {
+    //setDisparo(0);
+  }
+  delay(1);
+}
 
 void handleNewMessages(int numNewMessages) {  //funcion que espera mensajes de telegram
   Serial.println("handleNewMessages");
   Serial.println(String(numNewMessages));
 
   for (int i = 0; i < numNewMessages; i++) {              // recibe el numero de mensajes, es necesario, auqnue sea 1
-                                                          // Chat id of the requester
     String chat_id = String(bot.messages[i].chat_id);     //guarda el identificador del chat en formato string
     if (chat_id != CHAT_ID) {                             // comparamos los identificadores
       bot.sendMessage(chat_id, "Unauthorized user", "");  // funcion para mandar un mensaje al chat identificado
@@ -107,63 +284,25 @@ void handleNewMessages(int numNewMessages) {  //funcion que espera mensajes de t
       welcome += "/Estado para detectar el estado de la alarma \n";
       bot.sendMessage(chat_id, welcome, "");
     }
-
-    if (text == "/Policia_en_camino@Caicedo_15a_bot") {
-      bot.sendMessage(chat_id, "Autoridades fueron notifcadas", "");
-      policia = false;
-    }
-
-    if (text == "/Apagar@Caicedo_15a_bot") {
-      bot.sendMessage(chat_id, "Alarma desactivada", "");
-      activar = 48;
-    }
-    if (text == "/Estado@Caicedo_15a_bot") {
-      if (activar == 49 || activar == 51)
-        bot.sendMessage(chat_id, "Comunidad activo alarma!!!", "");
-      if (activar == 48 || activar == 50)
-        bot.sendMessage(chat_id, "Alarma desactivada", "");
-    }
   }
 }
 
 
-void callback(char* topic, byte* payload, unsigned int length) {  // recibe los mensajes del broker y el topico suscrito
-
+void callback(char *topic, byte *payload, unsigned int length) {  // recibe los mensajes del broker y el topico suscrito
+  mensaje = "";
   Serial.print("Mensaje: ");
   for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-    grupo += (char)payload[i];  // variable para recibir mensajes
+    mensaje += (char)payload[i];  // variable para recibir mensajes
   }
+  mensaje.trim();
+  Serial.println(mensaje + "\n");
   String grupoEsp = grupo + "_" + chipID;  //se crea grupo para que no se repita
-  Serial.println();
-  Serial.println(grupoEsp);
-  const char* topic1 = "+/";
-  const char* topic2 = grupoEsp.c_str();
-  char fullTopic[50];  // Ajusta el tamaño según tus necesidades
-  strcpy(fullTopic, topic1);
-  strcat(fullTopic, topic2);
-  if (suscripcionTopico) {
-    if (client.subscribe(fullTopic)) {  // nos suscribimos a un topico, en este caso a cualquiera que tenga como topic final /alarmaComonitaria
-      Serial.println("Suscribed to full topic del grupo!");
-      Serial.println(fullTopic);
-      mqttstate = client.state();  // obtiene el estado de la conexion, si es 0, fue correcta
-      suscripcionTopico = false;
-      //alarmaMqtt = 0;
-    }
-  }
 
-  //  Serial.println();
+  String topic1 = "+/";
+  String topic2 = grupoEsp;
+  fullTopic = topic1 + topic2;
 
-  activar = (char)payload[0];  // convierte los bits en enteros, con lo cual cada caracter es un numero entero, obtiene solo el primero
-  Serial.print("Mensaje: ");
-  alarmaMqtt = (char)payload[0];  // variable para recibir mensajes
-  //Serial.println((char)alarmaMqtt);
-
-
-  //Serial.println(alarmaMqtt);
-  //mensajeAlarma = (int)payload[0];
-  //Serial.println("Mensaje " + activar);
-  Serial.println(topic);
+  activacion();                         // esta en escucha de el valor de activacion
   bot.sendMessage(CHAT_ID, topic, "");  // Evnaimos a telegram, el topico de el cual se recibio el mensaje
 }
 
@@ -171,16 +310,30 @@ void heartBeatPrint(void) {  //revisa la conexion de el Wifi
 
   static int num = 1;
   if (WiFi.status() == WL_CONNECTED) {
-    if (mqttstate == 0) {             // es el estado de la conexion mqtt 0 es correcta
-      digitalWrite(led_verde, HIGH);  //Si esta conectado a wifi y conectado al broker el led encendera, verde
+    if (!client.connected()) {
+      unsigned long currentMillis = millis();
+      if (currentMillis - previousMillis >= 400) {
+        digitalWrite(2, HIGH);
+        previousMillis = 0;
+      }
+      if (currentMillis - previousMillis >= 800) {
+        digitalWrite(2, LOW);
+        previousMillis = 0;
+      }
+      if (currentMillis - previousMillis >= 1200) {
+        digitalWrite(2, HIGH);
+        previousMillis = 0;
+      }
+      if (currentMillis - previousMillis >= 1600) {
+        digitalWrite(2, LOW);
+        previousMillis = 0;
+      }
+      reconnect();
     }
-    digitalWrite(2, HIGH);
-    //Serial.println("H");
-  }  // H means connected to WiFi
-  else {
+
+
+  } else {
     Serial.println("F");
-    digitalWrite(2, HIGH);
-    delay(200);
     digitalWrite(2, LOW);
     if (wifimulti.run() == WL_CONNECTED) {  // si se cae la red actual, intenta conectar con las redes establecidas en el multiWifi
       Serial.println("me conecte a otra red papu");
@@ -223,17 +376,17 @@ void autoconnectap() {
   ESP_wifiManager.setDebugOutput(true);
   ESP_wifiManager.setAPStaticIPConfig(IPAddress(192, 168, 0, 120), IPAddress(192, 168, 0, 1), IPAddress(255, 255, 255, 0));  // Crea la configuracion para la red AP
   ESP_wifiManager.setMinimumSignalQuality(-1);                                                                               // la minima n permitida
-  //Router_SSID = ESP_wifiManager.WiFi_SSID(); // Obtiene la ultima red coneectada eeprom
-  //Router_Pass = ESP_wifiManager.WiFi_Pass(); //obtiene la contraseña de la ultima red conectada, Eeprom
-  Router_SSID = "CARLOS";        // Obtiene la ultima red coneectada eeprom
-  Router_Pass = "Cm3148011184";  //obtiene la contraseña de la ultima red conectada, Eeprom
+  Router_SSID = ESP_wifiManager.WiFi_SSID();                                                                                 // Obtiene la ultima red coneectada eeprom
+  Router_Pass = ESP_wifiManager.WiFi_Pass();                                                                                 //obtiene la contraseña de la ultima red conectada, Eeprom
+  //Router_SSID = "CARLOS";        // Obtiene la ultima red coneectada eeprom
+  //Router_Pass = "Cm3148011184";  //obtiene la contraseña de la ultima red conectada, Eeprom
   Serial.println("Stored: SSID = " + Router_SSID + ", Pass = " + Router_Pass);
 
   if (Router_SSID != "")  //existen credenciales y sigue la conexion
   {
     ESP_wifiManager.setConfigPortalTimeout(0);  //If no access point name has been previously entered disable timeout.
     Serial.println("Got stored Credentials. Timeout 60s");
-    Serial.println(WiFi.SSID());
+
   } else {
     Serial.println("No stored Credentials. No timeout");
     if (wifimulti.run() == WL_CONNECTED) {  //No encuentra ninguna conexion anterior por lo tanto accede por medio de las guardadas en multiwifi, este es un machete a corregir
@@ -244,219 +397,111 @@ void autoconnectap() {
     Serial.println("Sali de aqui gf");
   }
 
-  chipID.toUpperCase();
+  //chipID.toUpperCase();
+
   String AP_SSID = "Alarma" + chipID;  //El nombre de la red AP
   String AP_PASS = "ESP_" + chipID;    //Pass de la red AP
   if (AP_mode) {                       // No esta en este modo a menos que se especifique dadas las condiciones
     ESP_wifiManager.resetSettings();   // Resetea toda la informacion de las conexiones de la eeprom
     esp_task_wdt_init(240, true);      // establece el watchdog en 4 min para asi tener tiempo de conectarse
   }
-  digitalWrite(led_azul, HIGH);
-  if (ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str())) {  // intenta conectarse con las credenciales guardadas en la eprom
-    conexion = true;                                                    // la conexion fue correcta, sigue en el codigo
+  //digitalWrite(led_azul, HIGH);
+  Serial.println(AP_SSID);
+  Serial.println(AP_PASS);
+  //if (ESP_wifiManager.autoConnect(AP_SSID.c_str(), AP_PASS.c_str())) {  // intenta conectarse con las credenciales guardadas en la eprom
+  if (ESP_wifiManager.autoConnect(Router_SSID.c_str(), Router_Pass.c_str())) {
+    conexion = true;
+    Serial.println("4");  // la conexion fue correcta, sigue en el codigo
     Serial.println("WiFi connected la ip es:" + WiFi.localIP().toString());
-    digitalWrite(led_azul, LOW);  // Sale del modo AP
-  }
-}
-
-
-void mqttconnect(const char* mqttServer, const int mqttPort, WiFiClient espclient, const char* mqttUser, const char* mqttPassword) {  //funcion de mqtt
-  client.setServer(mqttServer, mqttPort);
-  unsigned long checkstatus_timeout = 0;  //Timers para evitar delays
-  unsigned long checkstatus_time = 0;
-
-#define MQTT_INTERVAL 1000L  // el valor de la espera//52
-#define MQTT_INTERVAL_LED 1000L
-  while (!client.connected()) {              // el mqtt no esta conectado, se queda en este ciclo
-    if ((millis() > checkstatus_timeout)) {  // entra al "Delay"
-      Serial.println("Connecting to MQTT...");
-      if (client.connect("espAuxiliar", mqttUser, mqttPassword)) {  // la conexion al broker es correcta Editar Dianmica esp
-        Serial.println("connected");
-        const char* message = "Ingrese red auxiliar";                          // guarda un mensaje en char*
-        int length = strlen(message);                                          // obtiene la longitud del mensaje
-        boolean retained = true;                                               // retiene el mensaje hasta ser enviado
-        client.publish("oscarmelo/prueba", (byte*)message, length, retained);  // publica el mensaje en el topic establecido, convirtiendo el mensaje en byte payload[]
-        Serial.println("mensaje sent");
-        const char* topicConf1 = "cerbero/Config_";
-        const char* topicConf2 = chipID.c_str();
-        char fullTopicConf[50];  // Ajusta el tamaño según tus necesidades
-        strcpy(fullTopicConf, topicConf1);
-        strcat(fullTopicConf, topicConf2);
-        if (client.subscribe(fullTopicConf)) {  // nos suscribimos a un topico de configuracion
-          Serial.println("Modo configuracion!");
-          mqttstate = client.state();  // obtiene el estado de la conexion, si es 0, fue correcta
-        } else {                       //evia mensaje de error al suscribirse al topico, de manera serial
-          ulong timecontrol = 0;
-          if (millis() > timecontrol) {
-            Serial.println("Error to subscribe!");
-            timecontrol = millis() + 2000;
-          }  //4ef4bc
-        }
-      } else {  // Error en la conexion mqtt
-        ulong timecontrol = 0;
-        if (millis() > timecontrol) {
-          // Serial.println("Error connecting to MQTT");
-          // mqttstate = client.state();
-        }
-      }
-      checkstatus_timeout = millis() + MQTT_INTERVAL;  // un seg de espera
-      //Serial.println("Resetting WDT...");
-      esp_task_wdt_reset();  //resetea el watchdog para evitar que se reincie, cada seg
-    }
-
-    if (WiFi.status() != WL_CONNECTED) {
-      while (true) {
-        digitalWrite(led_rojo, HIGH);  // si no hay conexion en el intento de la conexion mqtt, no sale del ciclo y la esp se reiniciara.
-      }
-    }
-    if (WiFi.status() == WL_CONNECTED) {
-      digitalWrite(led_rojo, LOW);
-    }
-
-    if (millis() > checkstatus_time) {  // parpadea el led verde, en caso de haber wifi y no poder conectar con el broker
-      digitalWrite(led_verde, HIGH);
-      checkstatus_time = millis() + (MQTT_INTERVAL_LED / 4);
-      Serial.println(checkstatus_time / 1000);
-    }
-    if (millis() > checkstatus_time) {
-      digitalWrite(led_verde, LOW);
-      checkstatus_time = millis() + MQTT_INTERVAL_LED * 2;
-      Serial.println(checkstatus_time);
-    }
-  }
-}
-void encapsuladas() {                                        // funcion que trae las funciones principales conexion wifi y broker
-  autoconnectap();                                           // llama a la conexion a internet
-  if (conexion) {                                            // si la conexion a internet fue exitosa, intenta la conexion con el broker
-    esp_task_wdt_init(20, true);                             // si todo fue correcto, define el watchdogs en 20 seg. sacandolo de los 4 min establecidos anteriormente
-    mqttconnect("140.238.178.88", 1883, espclient, "", "");  // conexion al broker
-    // mqttconnect("broker.mqttdashboard.com",1883, espclient,"racso","bimborico22D");
-    client.setCallback(callback);  // funcion para escuchar los datos del broker
-  }
-}
-
-void activacion(char i) {  // aqui es para modelar el motor
-  //Serial.print(alarmaMqtt);
-  //Serial.println("ALARMA PARA PERROS");
-  if (alarmaMqtt != '0') {
     delay(1);
-    //Serial.println(alarmaMqtt);
-    if (alarmaMqtt == '1' || Bandera1 == true) {  // programa para alarma para perros
-      // iniciamos la alarma
-      delay(1);
-      Bandera1 = true;
-      cont1 = 0;
-      Serial.println("ALARMA PARA PERROS");
-      while (Bandera1 == true && cont1 <= 4) {
-        Serial.println(cont1);
-        for (int j = 0; j <= 255; j++) {
-          ledcWrite(ledChannel, j);  //PWM
-          delay(5);
-        }
-        unsigned long currentMillis = millis();
-        if (currentMillis - previousMillis >= 500) {
-          esp_task_wdt_reset();
-          ledcWrite(ledChannel, 0);  // modula la alarma segun el valor ingresado
-          cont1++;
-          previousMillis = 0;
-        }
-
-        if (cont1 == 4) {
-          Bandera1 = false;
-          alarmaMqtt = '0';
-          esp_task_wdt_reset();
-        }
-      }
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= 300) {
+      digitalWrite(2, HIGH);
+      previousMillis = 0;
     }
-
-    if (alarmaMqtt == '2' || Bandera2 == true) {  // alarma para ladrones
-      // iniciamos la alarma
-      delay(1);
-      Bandera2 = true;
-      cont2 = 0;
-      Serial.println("ALARMA PARA LADRONES");
-      while (Bandera2 == true && cont2 <= 2) {
-        Serial.println(cont2);
-        for (int j = 0; j <= 255; j++) {
-          ledcWrite(ledChannel, j);
-          delay(20);
-        }
-        unsigned long currentMillis = millis();
-        if (currentMillis - previousMillis >= 2000) {
-          ledcWrite(ledChannel, 0);  // modula la alarma segun el valor ingresado
-          cont2++;
-          previousMillis = 0;
-          esp_task_wdt_reset();
-        }
-        if (cont2 == 2) {
-          Bandera2 = false;
-          alarmaMqtt = '0';
-          esp_task_wdt_reset();
-        }
-      }
+    currentMillis = millis();
+    if (currentMillis - previousMillis >= 600) {
+      digitalWrite(2, LOW);
+      previousMillis = 0;
     }
-    if (alarmaMqtt == '3' || Bandera3 == true) {  // alarma para PELEA// iniciamos la alarma
-      delay(1);
-      Bandera3 = true;
-      cont3 = 0;
-      Serial.println("ALARMA PARA PELEA");
-      while (Bandera3 == true && cont3 <= 3) {
-        Serial.println(cont3);
-        for (int j = 0; j <= 255; j++) {
-          ledcWrite(ledChannel, j);
-          delay(20);
-        }
-        unsigned long currentMillis = millis();
-        if (currentMillis - previousMillis >= 1000) {
-          ledcWrite(ledChannel, 0);  // modula la alarma segun el valor ingresado
-          cont3++;
-          previousMillis = 0;
-          esp_task_wdt_reset();
-        }
-        if (cont3 == 3) {
-          Bandera3 = false;
-          alarmaMqtt = '0';
-          esp_task_wdt_reset();
-          ledcWrite(ledChannel, 0);  // modula la alarma segun el valor ingresado
-        }
-      }
+    currentMillis = millis();
+    if (currentMillis - previousMillis >= 900) {
+      digitalWrite(2, HIGH);
+      previousMillis = 0;
     }
-    if (alarmaMqtt == '5' || Bandera4 == true) {  // alarma para TERREMOTO
-      // iniciamos la alarma
-      delay(1);
-      Bandera4 = true;
-      cont4 = 0;
-      Serial.println("ALARMA PARA TERREMOTO");
-      while (Bandera4 == true && cont4 <= 5) {
-        Serial.println(cont4);
-        for (int j = 0; j <= 255; j++) {
-          ledcWrite(ledChannel, j);
-          delay(10);
-        }
-
-        unsigned long currentMillis = millis();
-        if (currentMillis - previousMillis >= 3000) {
-          esp_task_wdt_reset();
-          for (int j = 255; j >= 0; j--) {
-            ledcWrite(ledChannel, j);
-            delay(10);
-          }
-          cont4++;
-          previousMillis = 0;
-        }
-
-        if (cont4 == 5) {
-          Bandera4 = false;
-          alarmaMqtt = '0';
-          esp_task_wdt_reset();
-          ledcWrite(ledChannel, 0);
-          delay(1);
-        }
-      }
+    currentMillis = millis();
+    if (currentMillis - previousMillis >= 1200) {
+      digitalWrite(2, LOW);
+      previousMillis = 0;
+      /*
+    digitalWrite(ONBOARD_LED, HIGH);  // Sale del modo AP
+    delay(250);
+    digitalWrite(ONBOARD_LED, LOW);  // Sale del modo AP
+    delay(250);
+    digitalWrite(ONBOARD_LED, HIGH);  // Sale del modo AP
+    delay(250);
+    digitalWrite(ONBOARD_LED, LOW);  // Sale del modo AP*/
     }
   }
-  delay(1);
 }
+
+void encapsuladas() {  // funcion que trae las funciones principales conexion wifi y broker
+  Serial.println("INICIO DE CONEXION");
+  autoconnectap();  // llama a la conexion a internet
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
+  esp_task_wdt_init(20, true);
+}
+void reconnect() {
+
+  while (!client.connected()) {
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - previousMillis >= 500) {
+      digitalWrite(2, !digitalRead(2));
+      previousMillis = currentMillis;
+    }
+    if (currentMillis - previousMillis >= 1000) {
+      digitalWrite(2, !digitalRead(2));
+      previousMillis = currentMillis;
+    }
+    if (currentMillis - previousMillis >= 500) {
+      digitalWrite(2, !digitalRead(2));
+      previousMillis = currentMillis;
+    }
+    if (currentMillis - previousMillis >= 500) {
+      digitalWrite(2, !digitalRead(2));
+      previousMillis = currentMillis;
+    }
+    Serial.print("Intentando conexión Mqtt...");
+    // Creamos un cliente ID
+    String clientId = chipID;
+    // Intentamos conectar
+    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
+      Serial.println("Conectado: " + clientId);
+      // Nos suscribimos
+      //root_topic_subscribe += chipID;
+      //Serial.println(chipID);
+      Topico_sub.toCharArray(msg, 50);
+      //root_topic_subscribe.toCharArray(Topico_sub, 50);
+      if (client.subscribe(msg)) {
+        Serial.print("Suscripcion: ");
+        Serial.println(Topico_sub);
+      } else {
+        Serial.println("fallo Suscripciión");
+      }
+    } else {
+      Serial.print("falló :( con error -> ");
+      Serial.print(client.state());
+      Serial.println(" Intentamos de nuevo en 2 segundos");
+      delay(2000);
+    }
+  }
+}
+
+
+
+
 void actualizarbot() {  // Funcion de escucha al bot de telegram
   if (millis() > lastTimeBotRan + botRequestDelay) {
     int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
@@ -469,12 +514,12 @@ void actualizarbot() {  // Funcion de escucha al bot de telegram
     lastTimeBotRan = millis();
   }
 }
-
+/*
 void HandleMqtt()  //revisa la conexion del broker constantemente
 {
   if (!client.connected())  // si se descoencta
   {
-    if (conexion) {                                            // y hay wifi
+    if (conexion) {                                            // y hay wifi mqtt_port
       mqttconnect("140.238.178.88", 1883, espclient, "", "");  // intenta nuevamnete la conexion
       client.setCallback(callback);                            // vuelve a escuchar al broker
     }
@@ -495,13 +540,16 @@ void HandleMqtt()  //revisa la conexion del broker constantemente
     checkstatus_timeout = millis() + HEARTBEAT_INTERVAL_CTRL;  // vuelve a entrar cuando millis sea mayor a 1seg
   }
 }
+*/
+
 // codigo para modular el PWM de la alarma
 void setup() {
-  // setup PWM
+
+
 
   time1 = time2 = time3 = millis();
-  ledcSetup(ledChannel, freq, resolutionPWM);  // configura los parametros de PWM
-  ledcAttachPin(alarma, ledChannel);           // configura la salida de la senal de alarma
+
+  //ledcAttachPin(alarma, ledChannel);           // configura la salida de la senal de alarma
   //
 
   wifimulti.addAP("CARLOS", "Cm3148011184");
@@ -509,34 +557,58 @@ void setup() {
   espclient_telegram.setCACert(TELEGRAM_CERTIFICATE_ROOT);
   esp_task_wdt_add(NULL);  // necesario para el watchdog
   Serial.begin(115200);
-  pinMode(2, OUTPUT);  //Pin 2 como salida (Pin 2 es el led azul Interno del ESP32)
-  pinMode(senal, OUTPUT);
-  pinMode(led_verde, OUTPUT);
-  pinMode(led_rojo, OUTPUT);
-  pinMode(led_azul, OUTPUT);
-  Serial.println("\nStarting AutoConnectAP");
+  pinMode(ONBOARD_LED, OUTPUT);  //Pin 2 como salida (Pin 2 es el led azul Interno del ESP32)
+  // pinMode(led_verde, OUTPUT);
+  // pinMode(led_rojo, OUTPUT);
+  // pinMode(led_azul, OUTPUT);
+  Serial.println("\nStarting AutoConnectAP_setup");
   esp_task_wdt_init(240, true);  // establece de primer momento el valor de watcdog en 4 min para tener tiempo de la conexion AP
-  encapsuladas();                // llama a las funciones principales de conexion
-  ledcWrite(ledChannel, 0);
+  encapsuladas();                //SETUP                // llama a las funciones principales de conexion
+  pinMode(ZVC, INPUT_PULLUP);
+  pinMode(triacPulse, OUTPUT);
+  attachInterrupt(digitalPinToInterrupt(ZVC), acon, FALLING);  // attach Interrupt at PIN2
+  //Serial.println("FINALIZO SETUP");
+  esp_task_wdt_init(240, true);  // establece de primer momento el valor de watcdog en 4 min para tener tiempo de la conexion AP
+  digitalWrite(triacPulse, LOW);
+  dimming = 7200;
 }
 
 int last = millis();
 
+
 void loop() {
+  if (!client.connected()) {
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= 500) {
+      digitalWrite(2, !digitalRead(2));
+      previousMillis = currentMillis;
+    }
+    if (currentMillis - previousMillis >= 1000) {
+      digitalWrite(2, !digitalRead(2));
+      previousMillis = currentMillis;
+    }
+    if (currentMillis - previousMillis >= 500) {
+      digitalWrite(2, !digitalRead(2));
+      previousMillis = currentMillis;
+    }
+    if (currentMillis - previousMillis >= 500) {
+      digitalWrite(2, !digitalRead(2));
+      previousMillis = currentMillis;
+    }
+    reconnect();
+  } else {
+    digitalWrite(ONBOARD_LED, HIGH);
+  }
   //Serial.println((int)setAlarma, DEC);
-  HandleMqtt();
-  activacion(i);   // esta en escucha de el valor de activacion
+  //HandleMqtt();
+
   check_status();  // chekea el estado del wifi
   if (AP_mode) {   // en caso que se entre en modo AP vuelve a ejecutar las funciones principales
     encapsuladas();
     AP_mode = false;
   }
   // Continia escucha y evaluacion de la conexion al broker
-  actualizarbot();  // Esccuha del bot de telegram
-
-  if ((activar == 49 || activar == 51) && policia == true) {  // manda mensaje de alerta hasta que se salga del ciclo por medio de policia = false
-    bot.sendMessage(CHAT_ID, "Comunidad activo alarma!!!", "");
-  }
+  //actualizarbot();  // Esccuha del bot de telegram
 
   if (millis() - last >= 2000 && reset_esp == false) {  // reset el watchdogs cada 2 seg, dado el caso no resete la esp se reinciiara
     //Serial.println("Resetting WDT...");
@@ -547,4 +619,18 @@ void loop() {
       reset_esp == false;
     }
   }
+  esp_task_wdt_reset();
+  client.loop();
+}
+// funcion para detectar el cruce por cero
+
+void acon() {
+
+  delayMicroseconds(dimming);  // read AD0
+  digitalWrite(triacPulse, HIGH);
+
+  delayMicroseconds(50);  //delay 50 uSec on output pulse to turn on triac
+  digitalWrite(triacPulse, LOW);
+
+  // Serial.println(digitalRead(triacPulse));
 }
